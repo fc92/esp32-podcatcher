@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
@@ -20,9 +20,9 @@
 #include "esp_tls.h"
 #include "http_client.h"
 #include "esp_http_client.h"
+#include "sd_card.h"
 
-#define MAX_HTTP_RECV_BUFFER 512
-#define MAX_HTTP_OUTPUT_BUFFER 2048
+#define MAX_HTTP_RECV_BUFFER 4000
 static const char *TAG = "HTTP_CLIENT";
 
 /* Root cert for howsmyssl.com, taken from howsmyssl_com_root_cert.pem
@@ -40,7 +40,7 @@ static const char *TAG = "HTTP_CLIENT";
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 {
-    static char *output_buffer; // Buffer to store response of http request from event handler
+    static void *output_buffer; // Buffer to store response of http request from event handler
     static int output_len;      // Stores number of bytes read
     switch (evt->event_id)
     {
@@ -73,7 +73,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
             {
                 if (output_buffer == NULL)
                 {
-                    output_buffer = (char *)malloc(esp_http_client_get_content_length(evt->client));
+                    output_buffer = (void *)malloc(esp_http_client_get_content_length(evt->client));
                     output_len = 0;
                     if (output_buffer == NULL)
                     {
@@ -118,7 +118,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-static void http_perform_as_stream_reader(char *url)
+static void http_perform_as_stream_reader(char *url, FILE* f)
 {
     char *buffer = malloc(MAX_HTTP_RECV_BUFFER + 1);
     if (buffer == NULL)
@@ -139,10 +139,11 @@ static void http_perform_as_stream_reader(char *url)
     }
     int content_length = esp_http_client_fetch_headers(client);
     int total_read_len = 0, read_len = 0;
-    // while (total_read_len < content_length && content_length <= MAX_HTTP_RECV_BUFFER) {
-    while (total_read_len < content_length)
+
+    while (total_read_len < content_length*1.0)
     {
-        ESP_LOGD(TAG, "total_read_len: %d, content_length=%d", total_read_len, content_length);
+        ESP_LOGI(TAG, "total_read_len: %d, content_length=%d -- %.2f %%", total_read_len, content_length,
+            total_read_len*1.0*100/content_length*1.0);
         int length_to_read = MAX_HTTP_RECV_BUFFER;
         if (content_length - total_read_len < MAX_HTTP_RECV_BUFFER)
         {
@@ -156,7 +157,8 @@ static void http_perform_as_stream_reader(char *url)
         else
         {
             total_read_len += read_len;
-            ESP_LOGD(TAG, "Buffer: %s", buffer);
+            write_data_to_file(buffer, read_len, f);
+            // ESP_LOGD(TAG, "Buffer: %s", buffer);
         }
         if (esp_http_client_is_complete_data_received(client))
         {
@@ -168,6 +170,8 @@ static void http_perform_as_stream_reader(char *url)
         }
         ESP_LOGD(TAG, "read_len = %d", read_len);
     }
+    ESP_LOGI(TAG, "total_read_len: %d, content_length=%d -- %.2f %%", total_read_len, content_length,
+            total_read_len*1.0*100/content_length*1.0);
     ESP_LOGI(TAG, "HTTP Stream reader Status = %d, content_length = %d",
              esp_http_client_get_status_code(client),
              esp_http_client_get_content_length(client));
@@ -175,14 +179,6 @@ static void http_perform_as_stream_reader(char *url)
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     free(buffer);
-}
-
-static void http_test_task(void *pvParameters)
-{
-    http_perform_as_stream_reader((char *)pvParameters);
-
-    ESP_LOGI(TAG, "Finish http example");
-    vTaskDelete(NULL);
 }
 
 void init_wifi(void)
@@ -206,7 +202,7 @@ void init_wifi(void)
     ESP_LOGI(TAG, "Connected to AP, begin http example");
 }
 
-void download_file(char *url)
+void download_file(char *url, FILE* f)
 {
-    xTaskCreate(&http_test_task, "http_test_task", 8192, (void *)url, 5, NULL);
+    http_perform_as_stream_reader(url, f);
 }

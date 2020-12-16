@@ -12,6 +12,7 @@
 #include "esp_system.h"
 #include "esp_spi_flash.h"
 #include "http_client.h"
+#include "sd_card.h"
 
 
 void app_main(void)
@@ -34,7 +35,12 @@ void app_main(void)
     fflush(stdout);
 
     init_wifi();
-    char * url = "https://dl.espressif.com/dl/audio/ff-16b-2c-44100hz.mp3";
-    // char * url = "http://www.hochmuth.com/mp3/Haydn_Cello_Concerto_D-1.mp3";
-    download_file(url);
+    init_sd();
+    FILE* f=open_file("test.mp3");
+    
+//     char * url = "https://dl.espressif.com/dl/audio/ff-16b-2c-44100hz.mp3";
+    char * url = "http://www.hochmuth.com/mp3/Haydn_Cello_Concerto_D-1.mp3";
+    download_file(url, f);
+    close_file(f);
+    unmount();
 }
