@@ -9,7 +9,8 @@
   },
   "C_Cpp.intelliSenseEngineFallback": "Enabled",
   "files.associations": {
-    "esp_spi_flash.h": "c"
+    "esp_spi_flash.h": "c",
+    "http_client.h": "c"
   },
-  "idf.port": "/dev/ttyUSB0"
+  "idf.port": "/dev/ttyUSB0",
 }

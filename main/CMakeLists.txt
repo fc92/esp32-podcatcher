@@ -1,4 +1,4 @@
 idf_component_register(
-    SRCS "main.c"
-    INCLUDE_DIRS ""
+    SRCS "main.c" "http_client.c"
+    INCLUDE_DIRS "include"
 )
